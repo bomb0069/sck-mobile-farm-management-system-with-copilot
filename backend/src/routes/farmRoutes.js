@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const farmController = require('../controllers/farmController');
+const houseRoutes = require('./houseRoutes');
+const batchRoutes = require('./batchRoutes');
 const { authenticateToken, checkFarmOwnership } = require('../middleware/auth');
 const { validateRequest, farmCreationSchema, farmUpdateSchema } = require('../middleware/validation');
 
@@ -40,5 +42,9 @@ router.get('/:id/dashboard',
   checkFarmOwnership, 
   farmController.getFarmDashboard
 );
+
+// Nested routes สำหรับโรงเรือนและรอบการเลี้ยง
+router.use('/:farmId/houses', houseRoutes);
+router.use('/:farmId/batches', batchRoutes);
 
 module.exports = router;
