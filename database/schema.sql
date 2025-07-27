@@ -278,3 +278,128 @@ INSERT INTO medicine_types (name, medicine_category, dosage_instruction, withdra
 ('แอนติไบโอติก เอนโรฟล็อกซาซิน', 'antibiotic', 'ผสมน้ำดื่ม ตามใบสั่งแพทย์', 5, 'ml'),
 ('โปรไบโอติก', 'probiotic', 'ผสมอาหาร 1g:1kg', 0, 'gram'),
 ('ยาฆ่าเชื้อไวรัส', 'treatment', 'สเปรย์ในโรงเรือน', 1, 'ml');
+
+-- ตาราง Customers สำหรับจัดการลูกค้า
+CREATE TABLE customers (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    farm_id INT NOT NULL,
+    customer_code VARCHAR(50) NOT NULL,
+    customer_type ENUM('individual', 'company', 'distributor', 'restaurant', 'retail') DEFAULT 'individual',
+    company_name VARCHAR(255),
+    contact_person VARCHAR(255),
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    phone VARCHAR(20),
+    email VARCHAR(255),
+    address TEXT,
+    province VARCHAR(100),
+    district VARCHAR(100),
+    subdistrict VARCHAR(100),
+    postal_code VARCHAR(10),
+    tax_id VARCHAR(20),
+    credit_limit DECIMAL(12,2) DEFAULT 0,
+    payment_terms_days INT DEFAULT 0,
+    discount_percent DECIMAL(5,2) DEFAULT 0,
+    preferred_products TEXT, -- JSON array of preferred product types
+    delivery_address TEXT,
+    delivery_notes TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (farm_id) REFERENCES farms(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_customer_code_per_farm (farm_id, customer_code)
+);
+
+-- ตาราง Customer Orders สำหรับคำสั่งซื้อ
+CREATE TABLE customer_orders (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    farm_id INT NOT NULL,
+    customer_id INT NOT NULL,
+    order_number VARCHAR(50) NOT NULL,
+    order_date DATE NOT NULL,
+    delivery_date DATE,
+    status ENUM('pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled') DEFAULT 'pending',
+    total_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    discount_amount DECIMAL(12,2) DEFAULT 0,
+    tax_amount DECIMAL(12,2) DEFAULT 0,
+    net_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    payment_status ENUM('unpaid', 'partial', 'paid', 'overdue') DEFAULT 'unpaid',
+    payment_method VARCHAR(50),
+    delivery_address TEXT,
+    delivery_notes TEXT,
+    special_instructions TEXT,
+    created_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (farm_id) REFERENCES farms(id) ON DELETE CASCADE,
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id),
+    UNIQUE KEY unique_order_number_per_farm (farm_id, order_number)
+);
+
+-- ตาราง Order Items สำหรับรายการสินค้าในคำสั่งซื้อ
+CREATE TABLE order_items (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    order_id INT NOT NULL,
+    product_type ENUM('eggs', 'live_birds', 'processed_meat', 'other') NOT NULL,
+    product_name VARCHAR(255) NOT NULL,
+    product_description TEXT,
+    grade VARCHAR(50), -- เกรดไข่ (0,1,2,3) หรือขนาดไก่
+    quantity INT NOT NULL,
+    unit VARCHAR(50) NOT NULL, -- pieces, kg, crates, etc.
+    unit_price DECIMAL(10,2) NOT NULL,
+    total_price DECIMAL(12,2) NOT NULL,
+    batch_id INT, -- อ้างอิงไปยัง batch ที่สินค้ามาจาก
+    harvest_date DATE,
+    quality_notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES customer_orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (batch_id) REFERENCES batches(id) ON DELETE SET NULL
+);
+
+-- ตาราง Customer Payments สำหรับการชำระเงิน
+CREATE TABLE customer_payments (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    farm_id INT NOT NULL,
+    customer_id INT NOT NULL,
+    order_id INT,
+    payment_number VARCHAR(50) NOT NULL,
+    payment_date DATE NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    payment_method ENUM('cash', 'bank_transfer', 'check', 'credit_card', 'other') NOT NULL,
+    reference_number VARCHAR(100),
+    notes TEXT,
+    received_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (farm_id) REFERENCES farms(id) ON DELETE CASCADE,
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+    FOREIGN KEY (order_id) REFERENCES customer_orders(id) ON DELETE SET NULL,
+    FOREIGN KEY (received_by) REFERENCES users(id),
+    UNIQUE KEY unique_payment_number_per_farm (farm_id, payment_number)
+);
+
+-- ตาราง Customer Communications สำหรับการติดต่อสื่อสาร
+CREATE TABLE customer_communications (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    customer_id INT NOT NULL,
+    communication_type ENUM('call', 'email', 'visit', 'message', 'complaint', 'inquiry') NOT NULL,
+    subject VARCHAR(255),
+    message TEXT,
+    communication_date DATETIME NOT NULL,
+    follow_up_date DATE,
+    status ENUM('open', 'in_progress', 'resolved', 'closed') DEFAULT 'open',
+    priority ENUM('low', 'medium', 'high', 'urgent') DEFAULT 'medium',
+    created_by INT,
+    assigned_to INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id),
+    FOREIGN KEY (assigned_to) REFERENCES users(id)
+);
+
+-- Insert ข้อมูลตัวอย่างลูกค้า
+INSERT INTO customers (farm_id, customer_code, customer_type, company_name, contact_person, phone, email, address, payment_terms_days) VALUES
+(1, 'CUST001', 'company', 'ร้านไข่สดทองคำ', 'คุณสมชาย ใจดี', '02-123-4567', 'somchai@thongkam.com', '123 ถนนพหลโยธิน กรุงเทพฯ', 30),
+(1, 'CUST002', 'restaurant', 'ร้านอาหารบ้านสวน', 'คุณมาลี รักสวน', '081-234-5678', 'malee@baansuan.com', '456 ถนนสุขุมวิท กรุงเทพฯ', 7),
+(1, 'CUST003', 'individual', NULL, 'คุณวิชัย', 'วิชัย', 'ดีมาก', '091-345-6789', 'vichai@email.com', '789 หมู่ 1 ต.บ้านใหม่ อ.เมือง จ.นครปฐม', 0);
